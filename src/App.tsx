@@ -4,6 +4,8 @@ export default function App() {
   const [volume, setVolume] = useState(1); // 1 = 100%
   const [isLooping, setIsLooping] = useState(true);
   const [loopCount, setLoopCount] = useState(3);
+  const [speechText, setSpeechText] = useState('');
+  const [voiceGender, setVoiceGender] = useState<'male' | 'female'>('female');
   const audioContextRef = useRef<AudioContext | null>(null);
   const buffersRef = useRef<Record<string, AudioBuffer>>({});
   const activeSourcesRef = useRef<Set<AudioBufferSourceNode | OscillatorNode>>(new Set());
@@ -28,6 +30,7 @@ export default function App() {
   };
 
   const stopAll = () => {
+    window.speechSynthesis.cancel();
     activeSourcesRef.current.forEach(source => {
       try {
         source.stop();
@@ -102,6 +105,42 @@ export default function App() {
     }
   };
 
+  const speakText = () => {
+    if (!speechText.trim()) return;
+    
+    // Cancel any ongoing speech
+    window.speechSynthesis.cancel();
+    
+    const utterance = new SpeechSynthesisUtterance(speechText);
+    utterance.volume = Math.min(volume, 1); // SpeechSynthesis volume is 0 to 1
+    
+    const voices = window.speechSynthesis.getVoices();
+    const englishVoices = voices.filter(v => v.lang.startsWith('en'));
+    
+    let selectedVoice = null;
+    if (voiceGender === 'female') {
+      selectedVoice = englishVoices.find(v => 
+        v.name.toLowerCase().includes('female') || 
+        v.name.toLowerCase().includes('zira') || 
+        v.name.toLowerCase().includes('samantha') ||
+        v.name.toLowerCase().includes('google us english')
+      ) || englishVoices[0];
+    } else {
+      selectedVoice = englishVoices.find(v => 
+        v.name.toLowerCase().includes('male') || 
+        v.name.toLowerCase().includes('david') || 
+        v.name.toLowerCase().includes('alex') ||
+        v.name.toLowerCase().includes('google uk english male')
+      ) || englishVoices[1] || englishVoices[0];
+    }
+
+    if (selectedVoice) {
+      utterance.voice = selectedVoice;
+    }
+
+    window.speechSynthesis.speak(utterance);
+  };
+
   return (
     <div className="min-h-screen bg-slate-100 flex flex-col items-center justify-center p-4">
       <h1 className="text-3xl font-bold text-slate-900 mb-8">Soundboard</h1>
@@ -163,8 +202,44 @@ export default function App() {
           step="0.1"
           value={volume}
           onChange={(e) => setVolume(parseFloat(e.target.value))}
-          className="w-full h-2 bg-slate-200 rounded-lg appearance-none cursor-pointer accent-indigo-600"
+          className="w-full h-2 bg-slate-200 rounded-lg appearance-none cursor-pointer accent-indigo-600 mb-8"
         />
+
+        <div className="border-t border-slate-100 pt-6">
+          <label className="block text-sm font-semibold text-slate-900 mb-3 uppercase tracking-wider">
+            Text to Speech
+          </label>
+          <div className="flex flex-col gap-3">
+            <div className="flex items-center gap-2 p-1 bg-slate-100 rounded-xl">
+              <button 
+                onClick={() => setVoiceGender('female')}
+                className={`flex-1 py-2 rounded-lg text-[10px] font-bold transition-all uppercase tracking-widest ${voiceGender === 'female' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+              >
+                Female Voice
+              </button>
+              <button 
+                onClick={() => setVoiceGender('male')}
+                className={`flex-1 py-2 rounded-lg text-[10px] font-bold transition-all uppercase tracking-widest ${voiceGender === 'male' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+              >
+                Male Voice
+              </button>
+            </div>
+            <textarea
+              value={speechText}
+              onChange={(e) => setSpeechText(e.target.value)}
+              placeholder="Type something to speak..."
+              className="w-full p-3 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-indigo-500 focus:border-transparent outline-none transition-all resize-none h-24"
+            />
+            <button
+              onClick={speakText}
+              disabled={!speechText.trim()}
+              className="w-full bg-indigo-600 hover:bg-indigo-700 disabled:bg-slate-300 text-white font-bold py-3 rounded-xl transition-all active:scale-95 flex items-center justify-center gap-2 shadow-md"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M11 5L6 9H2v6h4l5 4V5z"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14"/></svg>
+              SPEAK
+            </button>
+          </div>
+        </div>
       </div>
     </div>
   );
