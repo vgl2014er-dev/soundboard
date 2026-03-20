@@ -6,6 +6,8 @@ export default function App() {
   const [loopCount, setLoopCount] = useState(3);
   const [speechText, setSpeechText] = useState('');
   const [voiceGender, setVoiceGender] = useState<'male' | 'female'>('female');
+  const [isCaching, setIsCaching] = useState(false);
+  const [cacheProgress, setCacheProgress] = useState(0);
   const audioContextRef = useRef<AudioContext | null>(null);
   const buffersRef = useRef<Record<string, AudioBuffer>>({});
   const activeSourcesRef = useRef<Set<AudioBufferSourceNode | OscillatorNode>>(new Set());
@@ -16,6 +18,8 @@ export default function App() {
     { id: 'severe', name: 'Severe Warning', url: 'https://video-idea.fra1.cdn.digitaloceanspaces.com/beeps/freesound_community-severe-warning-alarm-98704.mp3', color: 'bg-red-600 hover:bg-red-700' },
     { id: 'alarm', name: 'Alarm Loop', url: 'https://video-idea.fra1.cdn.digitaloceanspaces.com/beeps/audley_fergine-warning-alarm-loop-1-279206%20(1).mp3', color: 'bg-orange-600 hover:bg-orange-700' },
     { id: 'warning2', name: 'Warning 2', url: 'https://video-idea.fra1.cdn.digitaloceanspaces.com/beeps/wefgf-warning-423632.mp3', color: 'bg-rose-500 hover:bg-rose-600' },
+    { id: 'countdown321', name: '3-2-1 Countdown', url: 'https://video-idea.fra1.cdn.digitaloceanspaces.com/beeps/11325622-female-vocal-321-countdown-240912.mp3', color: 'bg-emerald-600 hover:bg-emerald-700' },
+    { id: 'countdown20s', name: '20s Countdown', url: 'https://video-idea.fra1.cdn.digitaloceanspaces.com/beeps/patw64-20-seconds-game-countdown-142456.mp3', color: 'bg-cyan-600 hover:bg-cyan-700' },
   ];
 
   const initAudioContext = async () => {
@@ -141,6 +145,24 @@ export default function App() {
     window.speechSynthesis.speak(utterance);
   };
 
+  const cacheAllSounds = async () => {
+    setIsCaching(true);
+    setCacheProgress(0);
+    const soundsToCache = sounds.filter(s => s.url);
+    let cachedCount = 0;
+
+    for (const sound of soundsToCache) {
+      try {
+        await loadSound(sound.id, sound.url!);
+        cachedCount++;
+        setCacheProgress(Math.round((cachedCount / soundsToCache.length) * 100));
+      } catch (error) {
+        console.error(`Failed to cache ${sound.name}:`, error);
+      }
+    }
+    setIsCaching(false);
+  };
+
   return (
     <div className="min-h-screen bg-slate-100 flex flex-col items-center justify-center p-4">
       <h1 className="text-3xl font-bold text-slate-900 mb-8">Soundboard</h1>
@@ -159,10 +181,33 @@ export default function App() {
 
         <button
           onClick={stopAll}
-          className="w-full bg-slate-900 hover:bg-black text-white font-bold py-4 rounded-xl mb-6 transition-all active:scale-95 shadow-lg flex items-center justify-center gap-2"
+          className="w-full bg-slate-900 hover:bg-black text-white font-bold py-4 rounded-xl mb-4 transition-all active:scale-95 shadow-lg flex items-center justify-center gap-2"
         >
           <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect width="18" height="18" x="3" y="3" rx="2" ry="2"/></svg>
           STOP ALL
+        </button>
+
+        <button
+          onClick={cacheAllSounds}
+          disabled={isCaching}
+          className={`w-full font-bold py-3 rounded-xl mb-6 transition-all active:scale-95 flex flex-col items-center justify-center gap-1 border-2 ${
+            isCaching 
+              ? 'bg-slate-50 border-slate-200 text-slate-400 cursor-not-allowed' 
+              : 'bg-white border-indigo-100 text-indigo-600 hover:bg-indigo-50 hover:border-indigo-200'
+          }`}
+        >
+          <div className="flex items-center gap-2 text-sm">
+            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" x2="12" y1="3" y2="15"/></svg>
+            {isCaching ? 'CACHING...' : 'CACHE ALL SOUNDS'}
+          </div>
+          {isCaching && (
+            <div className="w-full max-w-[200px] h-1 bg-slate-200 rounded-full overflow-hidden mt-1">
+              <div 
+                className="h-full bg-indigo-500 transition-all duration-300" 
+                style={{ width: `${cacheProgress}%` }}
+              />
+            </div>
+          )}
         </button>
         
         <div className="mb-4 flex items-center gap-2">
