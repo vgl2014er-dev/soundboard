@@ -8,9 +8,11 @@ export default function App() {
   const [voiceGender, setVoiceGender] = useState<'male' | 'female'>('female');
   const [isCaching, setIsCaching] = useState(false);
   const [cacheProgress, setCacheProgress] = useState(0);
+  const [activeTab, setActiveTab] = useState<'sounds' | 'speech'>('sounds');
   const audioContextRef = useRef<AudioContext | null>(null);
   const buffersRef = useRef<Record<string, AudioBuffer>>({});
   const activeSourcesRef = useRef<Set<AudioBufferSourceNode | OscillatorNode>>(new Set());
+  const isSpeakingRef = useRef(false);
 
   const sounds = [
     { id: 'beep', name: 'Beep', color: 'bg-indigo-600 hover:bg-indigo-700' },
@@ -34,6 +36,7 @@ export default function App() {
   };
 
   const stopAll = () => {
+    isSpeakingRef.current = false;
     window.speechSynthesis.cancel();
     activeSourcesRef.current.forEach(source => {
       try {
@@ -114,35 +117,58 @@ export default function App() {
     
     // Cancel any ongoing speech
     window.speechSynthesis.cancel();
+    isSpeakingRef.current = true;
     
-    const utterance = new SpeechSynthesisUtterance(speechText);
-    utterance.volume = Math.min(volume, 1); // SpeechSynthesis volume is 0 to 1
-    
-    const voices = window.speechSynthesis.getVoices();
-    const englishVoices = voices.filter(v => v.lang.startsWith('en'));
-    
-    let selectedVoice = null;
-    if (voiceGender === 'female') {
-      selectedVoice = englishVoices.find(v => 
-        v.name.toLowerCase().includes('female') || 
-        v.name.toLowerCase().includes('zira') || 
-        v.name.toLowerCase().includes('samantha') ||
-        v.name.toLowerCase().includes('google us english')
-      ) || englishVoices[0];
-    } else {
-      selectedVoice = englishVoices.find(v => 
-        v.name.toLowerCase().includes('male') || 
-        v.name.toLowerCase().includes('david') || 
-        v.name.toLowerCase().includes('alex') ||
-        v.name.toLowerCase().includes('google uk english male')
-      ) || englishVoices[1] || englishVoices[0];
-    }
+    const maxLoops = isLooping ? loopCount : 1;
+    let currentLoop = 0;
 
-    if (selectedVoice) {
-      utterance.voice = selectedVoice;
-    }
+    const playUtterance = () => {
+      if (!isSpeakingRef.current) return;
+      const utterance = new SpeechSynthesisUtterance(speechText);
+      utterance.volume = Math.min(volume, 1); // SpeechSynthesis volume is 0 to 1
+      
+      const voices = window.speechSynthesis.getVoices();
+      const englishVoices = voices.filter(v => v.lang.startsWith('en'));
+      
+      let selectedVoice = null;
+      if (voiceGender === 'female') {
+        selectedVoice = englishVoices.find(v => 
+          v.name.toLowerCase().includes('female') || 
+          v.name.toLowerCase().includes('zira') || 
+          v.name.toLowerCase().includes('samantha') ||
+          v.name.toLowerCase().includes('google us english')
+        ) || englishVoices[0];
+      } else {
+        selectedVoice = englishVoices.find(v => 
+          v.name.toLowerCase().includes('male') || 
+          v.name.toLowerCase().includes('david') || 
+          v.name.toLowerCase().includes('alex') ||
+          v.name.toLowerCase().includes('google uk english male')
+        ) || englishVoices[1] || englishVoices[0];
+      }
 
-    window.speechSynthesis.speak(utterance);
+      if (selectedVoice) {
+        utterance.voice = selectedVoice;
+      }
+
+      utterance.onend = () => {
+        if (!isSpeakingRef.current) return;
+        currentLoop++;
+        if (currentLoop < maxLoops) {
+          playUtterance();
+        } else {
+          isSpeakingRef.current = false;
+        }
+      };
+
+      utterance.onerror = () => {
+        isSpeakingRef.current = false;
+      };
+
+      window.speechSynthesis.speak(utterance);
+    };
+
+    playUtterance();
   };
 
   const cacheAllSounds = async () => {
@@ -166,123 +192,180 @@ export default function App() {
   return (
     <div className="min-h-screen bg-slate-100 flex flex-col items-center justify-center p-4">
       <h1 className="text-3xl font-bold text-slate-900 mb-8">Soundboard</h1>
-      <div className="bg-white p-8 rounded-2xl shadow-md w-full max-w-md">
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-6">
-          {sounds.map((sound) => (
-            <button
-              key={sound.id}
-              onClick={() => playSound(sound.id)}
-              className={`w-full text-white font-semibold py-4 px-2 rounded-xl transition-colors text-sm ${sound.color}`}
-            >
-              {sound.name}
-            </button>
-          ))}
+      <div className="bg-white rounded-2xl shadow-md w-full max-w-md overflow-hidden">
+        {/* Tab Switcher */}
+        <div className="flex border-b border-slate-100">
+          <button
+            onClick={() => setActiveTab('sounds')}
+            className={`flex-1 py-4 text-sm font-bold transition-all ${
+              activeTab === 'sounds' 
+                ? 'text-indigo-600 border-b-2 border-indigo-600 bg-indigo-50/30' 
+                : 'text-slate-400 hover:text-slate-600 hover:bg-slate-50'
+            }`}
+          >
+            SOUNDS
+          </button>
+          <button
+            onClick={() => setActiveTab('speech')}
+            className={`flex-1 py-4 text-sm font-bold transition-all ${
+              activeTab === 'speech' 
+                ? 'text-indigo-600 border-b-2 border-indigo-600 bg-indigo-50/30' 
+                : 'text-slate-400 hover:text-slate-600 hover:bg-slate-50'
+            }`}
+          >
+            SPEECH
+          </button>
         </div>
 
-        <button
-          onClick={stopAll}
-          className="w-full bg-slate-900 hover:bg-black text-white font-bold py-4 rounded-xl mb-4 transition-all active:scale-95 shadow-lg flex items-center justify-center gap-2"
-        >
-          <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect width="18" height="18" x="3" y="3" rx="2" ry="2"/></svg>
-          STOP ALL
-        </button>
+        <div className="p-8">
+          {activeTab === 'sounds' ? (
+            <>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-6">
+                {sounds.map((sound) => (
+                  <button
+                    key={sound.id}
+                    onClick={() => playSound(sound.id)}
+                    className={`w-full text-white font-semibold py-4 px-2 rounded-xl transition-colors text-sm ${sound.color}`}
+                  >
+                    {sound.name}
+                  </button>
+                ))}
+              </div>
 
-        <button
-          onClick={cacheAllSounds}
-          disabled={isCaching}
-          className={`w-full font-bold py-3 rounded-xl mb-6 transition-all active:scale-95 flex flex-col items-center justify-center gap-1 border-2 ${
-            isCaching 
-              ? 'bg-slate-50 border-slate-200 text-slate-400 cursor-not-allowed' 
-              : 'bg-white border-indigo-100 text-indigo-600 hover:bg-indigo-50 hover:border-indigo-200'
-          }`}
-        >
-          <div className="flex items-center gap-2 text-sm">
-            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" x2="12" y1="3" y2="15"/></svg>
-            {isCaching ? 'CACHING...' : 'CACHE ALL SOUNDS'}
-          </div>
-          {isCaching && (
-            <div className="w-full max-w-[200px] h-1 bg-slate-200 rounded-full overflow-hidden mt-1">
-              <div 
-                className="h-full bg-indigo-500 transition-all duration-300" 
-                style={{ width: `${cacheProgress}%` }}
+              <button
+                onClick={cacheAllSounds}
+                disabled={isCaching}
+                className={`w-full font-bold py-3 rounded-xl mb-6 transition-all active:scale-95 flex flex-col items-center justify-center gap-1 border-2 ${
+                  isCaching 
+                    ? 'bg-slate-50 border-slate-200 text-slate-400 cursor-not-allowed' 
+                    : 'bg-white border-indigo-100 text-indigo-600 hover:bg-indigo-50 hover:border-indigo-200'
+                }`}
+              >
+                <div className="flex items-center gap-2 text-sm">
+                  <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" x2="12" y1="3" y2="15"/></svg>
+                  {isCaching ? 'CACHING...' : 'CACHE ALL SOUNDS'}
+                </div>
+                {isCaching && (
+                  <div className="w-full max-w-[200px] h-1 bg-slate-200 rounded-full overflow-hidden mt-1">
+                    <div 
+                      className="h-full bg-indigo-500 transition-all duration-300" 
+                      style={{ width: `${cacheProgress}%` }}
+                    />
+                  </div>
+                )}
+              </button>
+              
+              <div className="mb-4 flex items-center gap-2">
+                <input 
+                  type="checkbox" 
+                  id="loop"
+                  checked={isLooping}
+                  onChange={(e) => setIsLooping(e.target.checked)}
+                  className="w-4 h-4 accent-indigo-600"
+                />
+                <label htmlFor="loop" className="text-sm font-medium text-slate-700">Loop</label>
+              </div>
+
+              {isLooping && (
+                <div className="mb-6">
+                  <label className="block text-sm font-medium text-slate-700 mb-2">
+                    Number of loops: {loopCount}
+                  </label>
+                  <input
+                    type="number"
+                    min="1"
+                    max="10"
+                    value={loopCount}
+                    onChange={(e) => setLoopCount(Math.max(1, parseInt(e.target.value) || 1))}
+                    className="w-full p-2 border border-slate-300 rounded-lg"
+                  />
+                </div>
+              )}
+            </>
+          ) : (
+            <div className="flex flex-col gap-4 mb-8">
+              <div className="flex items-center gap-2 p-1 bg-slate-100 rounded-xl">
+                <button 
+                  onClick={() => setVoiceGender('female')}
+                  className={`flex-1 py-2 rounded-lg text-[10px] font-bold transition-all uppercase tracking-widest ${voiceGender === 'female' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+                >
+                  Female Voice
+                </button>
+                <button 
+                  onClick={() => setVoiceGender('male')}
+                  className={`flex-1 py-2 rounded-lg text-[10px] font-bold transition-all uppercase tracking-widest ${voiceGender === 'male' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+                >
+                  Male Voice
+                </button>
+              </div>
+              <textarea
+                value={speechText}
+                onChange={(e) => setSpeechText(e.target.value)}
+                placeholder="Type something to speak..."
+                className="w-full p-3 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-indigo-500 focus:border-transparent outline-none transition-all resize-none h-32"
               />
+              
+              <div className="flex flex-col gap-4">
+                <div className="flex items-center gap-2">
+                  <input 
+                    type="checkbox" 
+                    id="speech-loop"
+                    checked={isLooping}
+                    onChange={(e) => setIsLooping(e.target.checked)}
+                    className="w-4 h-4 accent-indigo-600"
+                  />
+                  <label htmlFor="speech-loop" className="text-sm font-medium text-slate-700">Loop Speech</label>
+                </div>
+
+                {isLooping && (
+                  <div>
+                    <label className="block text-sm font-medium text-slate-700 mb-2">
+                      Number of loops: {loopCount}
+                    </label>
+                    <input
+                      type="number"
+                      min="1"
+                      max="10"
+                      value={loopCount}
+                      onChange={(e) => setLoopCount(Math.max(1, parseInt(e.target.value) || 1))}
+                      className="w-full p-2 border border-slate-300 rounded-lg text-sm"
+                    />
+                  </div>
+                )}
+              </div>
+
+              <button
+                onClick={speakText}
+                disabled={!speechText.trim()}
+                className="w-full bg-indigo-600 hover:bg-indigo-700 disabled:bg-slate-300 text-white font-bold py-4 rounded-xl transition-all active:scale-95 flex items-center justify-center gap-2 shadow-md"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M11 5L6 9H2v6h4l5 4V5z"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14"/></svg>
+                SPEAK
+              </button>
             </div>
           )}
-        </button>
-        
-        <div className="mb-4 flex items-center gap-2">
-          <input 
-            type="checkbox" 
-            id="loop"
-            checked={isLooping}
-            onChange={(e) => setIsLooping(e.target.checked)}
-            className="w-4 h-4 accent-indigo-600"
-          />
-          <label htmlFor="loop" className="text-sm font-medium text-slate-700">Loop</label>
-        </div>
 
-        {isLooping && (
-          <div className="mb-6">
+          <div className="border-t border-slate-100 pt-6">
+            <button
+              onClick={stopAll}
+              className="w-full bg-slate-900 hover:bg-black text-white font-bold py-4 rounded-xl mb-6 transition-all active:scale-95 shadow-lg flex items-center justify-center gap-2"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect width="18" height="18" x="3" y="3" rx="2" ry="2"/></svg>
+              STOP ALL
+            </button>
+
             <label className="block text-sm font-medium text-slate-700 mb-2">
-              Number of loops: {loopCount}
+              Volume: {Math.round(volume * 100)}%
             </label>
             <input
-              type="number"
-              min="1"
-              max="10"
-              value={loopCount}
-              onChange={(e) => setLoopCount(Math.max(1, parseInt(e.target.value) || 1))}
-              className="w-full p-2 border border-slate-300 rounded-lg"
+              type="range"
+              min="0"
+              max="3"
+              step="0.1"
+              value={volume}
+              onChange={(e) => setVolume(parseFloat(e.target.value))}
+              className="w-full h-2 bg-slate-200 rounded-lg appearance-none cursor-pointer accent-indigo-600"
             />
-          </div>
-        )}
-
-        <label className="block text-sm font-medium text-slate-700 mb-2">
-          Volume: {Math.round(volume * 100)}%
-        </label>
-        <input
-          type="range"
-          min="0"
-          max="3"
-          step="0.1"
-          value={volume}
-          onChange={(e) => setVolume(parseFloat(e.target.value))}
-          className="w-full h-2 bg-slate-200 rounded-lg appearance-none cursor-pointer accent-indigo-600 mb-8"
-        />
-
-        <div className="border-t border-slate-100 pt-6">
-          <label className="block text-sm font-semibold text-slate-900 mb-3 uppercase tracking-wider">
-            Text to Speech
-          </label>
-          <div className="flex flex-col gap-3">
-            <div className="flex items-center gap-2 p-1 bg-slate-100 rounded-xl">
-              <button 
-                onClick={() => setVoiceGender('female')}
-                className={`flex-1 py-2 rounded-lg text-[10px] font-bold transition-all uppercase tracking-widest ${voiceGender === 'female' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
-              >
-                Female Voice
-              </button>
-              <button 
-                onClick={() => setVoiceGender('male')}
-                className={`flex-1 py-2 rounded-lg text-[10px] font-bold transition-all uppercase tracking-widest ${voiceGender === 'male' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
-              >
-                Male Voice
-              </button>
-            </div>
-            <textarea
-              value={speechText}
-              onChange={(e) => setSpeechText(e.target.value)}
-              placeholder="Type something to speak..."
-              className="w-full p-3 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-indigo-500 focus:border-transparent outline-none transition-all resize-none h-24"
-            />
-            <button
-              onClick={speakText}
-              disabled={!speechText.trim()}
-              className="w-full bg-indigo-600 hover:bg-indigo-700 disabled:bg-slate-300 text-white font-bold py-3 rounded-xl transition-all active:scale-95 flex items-center justify-center gap-2 shadow-md"
-            >
-              <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M11 5L6 9H2v6h4l5 4V5z"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14"/></svg>
-              SPEAK
-            </button>
           </div>
         </div>
       </div>
