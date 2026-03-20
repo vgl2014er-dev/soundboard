@@ -1,0 +1,5 @@
+{
+  "name": "Simple Soundboard",
+  "description": "A simple soundboard app with a beep sound, play button, and volume control.",
+  "requestFramePermissions": []
+}
